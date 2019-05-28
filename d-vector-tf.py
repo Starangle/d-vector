@@ -7,15 +7,17 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 from tensorflow.data import Dataset
+from models import *
 
 tf.enable_eager_execution()
 
 # 可配置区域开始
-SPEAKER_NUMBER = 10
 DEV_RATE = 0.1
 TEST_RATE = 0.1
 LEFT = 30
 RIGHT = 10
+EPCHO = 20
+BATCH = 256
 
 
 def EXTRACT(file):
@@ -32,9 +34,11 @@ def EXTRACT(file):
 # 配置demo ##################################################
 # /home/sub18/code/LibriSpeechFeature/simpleMFCC39.list
 # /home/sub18/code/log/d-vector-pretrain
+# 10
 # ###########################################################
 with contextlib.closing(open('config')) as f:
-    SRC, LOGDIR = f.read().split()
+    SRC, LOGDIR, SPEAKER_NUMBER = f.read().split()
+    SPEAKER_NUMBER = int(SPEAKER_NUMBER)
 
 with contextlib.closing(open(SRC)) as f:
     files = f.read().split()
@@ -71,43 +75,11 @@ def build_data(data):
     full_dataset = base_dataset.map(lambda x: tf.py_func(
         lambda x: [data[x]], inp=[x], Tout=[tf.string]))
     full_dataset = Dataset.zip((full_dataset, Dataset.range(SPEAKER_NUMBER)))
-    full_dataset = full_dataset.interleave(build_one_dataset,
-                                           cycle_length=SPEAKER_NUMBER,
-                                           num_parallel_calls=8)
-    full_dataset = full_dataset.batch(32)
+    full_dataset = full_dataset.interleave(build_one_dataset, cycle_length=SPEAKER_NUMBER,
+                                           num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    full_dataset = full_dataset.shuffle(BATCH*4)
+    full_dataset = full_dataset.batch(BATCH)
     return full_dataset
-
-
-def dense_model(features, labels, mode, params):
-    net = tf.reshape(features, [-1, params['feature_dims']])
-    for units in params['hidden_units']:
-        net = tf.layers.dense(net, units=units, activation=tf.nn.relu)
-    logits = tf.layers.dense(net, params['n_classes'], activation=None)
-
-    predicted_classes = tf.argmax(logits, 1)
-    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
-    accuracy = tf.metrics.accuracy(labels=labels,
-                                   predictions=predicted_classes,
-                                   name='acc_op')
-
-    metrics = {'accuracy': accuracy}
-    tf.summary.scalar('accuracy', accuracy[1])
-
-    if mode == tf.estimator.ModeKeys.PREDICT:
-        predictions = {
-            'class_ids': predicted_classes[:, tf.newaxis],
-            'probabilities': tf.nn.softmax(logits),
-            'logits': logits,
-        }
-        return tf.estimator.EstimatorSpec(mode, predictions=predictions)
-
-    if mode == tf.estimator.ModeKeys.EVAL:
-        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics)
-
-    assert mode == tf.estimator.ModeKeys.TRAIN
-    optimizer = tf.train.AdagradOptimizer(learning_rate=0.01)
-    train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
-    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
 
 classifier = tf.estimator.Estimator(
@@ -116,8 +88,11 @@ classifier = tf.estimator.Estimator(
     params={
         'feature_dims': 41*39,
         'hidden_units': [512, 512, 512, 512],
-        'n_classes': 10,
+        'n_classes': SPEAKER_NUMBER,
     })
 
-classifier.train(input_fn=lambda: build_data(train_set))
-result = classifier.evaluate(input_fn=lambda: build_data(test_set))
+for i in range(EPCHO):
+    classifier.train(input_fn=lambda: build_data(train_set))
+    classifier.evaluate(input_fn=lambda: build_data(dev_set))
+r=classifier.evaluate(input_fn=lambda:build_data(test_set))
+print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**r))
