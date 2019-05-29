@@ -16,8 +16,8 @@ DEV_RATE = 0.1
 TEST_RATE = 0.1
 LEFT = 30
 RIGHT = 10
-EPCHO = 20
-BATCH = 256
+EPCHO = 10
+BATCH = 512
 
 
 def EXTRACT(file):
@@ -26,6 +26,7 @@ def EXTRACT(file):
     for i in range(LEFT, len(x)-RIGHT):
         features.append(x[i-LEFT:i+RIGHT+1])
     features = np.reshape(features, (-1, (LEFT+RIGHT+1)*39))
+    np.random.shuffle(features)
     return features
 # 可配置区域结束
 
@@ -65,6 +66,7 @@ def build_data(data):
     def build_one_dataset(files, y):
 
         dataset = Dataset.from_tensor_slices(files)
+        dataset = dataset.shuffle(1024)
         dataset = dataset.map(lambda x: tf.py_func(
             EXTRACT, inp=[x], Tout=[tf.float64]), num_parallel_calls=4)
         dataset = dataset.flat_map(lambda x: Dataset.from_tensor_slices(x))
@@ -77,7 +79,7 @@ def build_data(data):
     full_dataset = Dataset.zip((full_dataset, Dataset.range(SPEAKER_NUMBER)))
     full_dataset = full_dataset.interleave(build_one_dataset, cycle_length=SPEAKER_NUMBER,
                                            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    full_dataset = full_dataset.shuffle(BATCH*4)
+    full_dataset = full_dataset.shuffle(BATCH*128)
     full_dataset = full_dataset.batch(BATCH)
     return full_dataset
 
@@ -94,5 +96,5 @@ classifier = tf.estimator.Estimator(
 for i in range(EPCHO):
     classifier.train(input_fn=lambda: build_data(train_set))
     classifier.evaluate(input_fn=lambda: build_data(dev_set))
-r=classifier.evaluate(input_fn=lambda:build_data(test_set))
+r = classifier.evaluate(input_fn=lambda: build_data(test_set))
 print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**r))
