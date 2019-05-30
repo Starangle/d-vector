@@ -8,38 +8,21 @@ import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 from tensorflow.data import Dataset
 from models import *
+from extractor import extract
 
 tf.enable_eager_execution()
 
 # 可配置区域开始
+SRC='/home/sub18/code/data_catalogue/libri_clean.list'
+LOGDIR='/home/sub18/code/log/d-vector-pretrain'
+SPEAKER_NUMBER=100
 DEV_RATE = 0.1
 TEST_RATE = 0.1
 LEFT = 30
 RIGHT = 10
 EPCHO = 10
 BATCH = 512
-
-
-def EXTRACT(file):
-    x = np.load(file)
-    features = []
-    for i in range(LEFT, len(x)-RIGHT):
-        features.append(x[i-LEFT:i+RIGHT+1])
-    features = np.reshape(features, (-1, (LEFT+RIGHT+1)*39))
-    np.random.shuffle(features)
-    return features
 # 可配置区域结束
-
-
-# 读取配置
-# 配置demo ##################################################
-# /home/sub18/code/LibriSpeechFeature/simpleMFCC39.list
-# /home/sub18/code/log/d-vector-pretrain
-# 10
-# ###########################################################
-with contextlib.closing(open('config')) as f:
-    SRC, LOGDIR, SPEAKER_NUMBER = f.read().split()
-    SPEAKER_NUMBER = int(SPEAKER_NUMBER)
 
 with contextlib.closing(open(SRC)) as f:
     files = f.read().split()
@@ -50,6 +33,8 @@ with contextlib.closing(open(SRC)) as f:
             ids[cid].append(file)
         elif len(ids) < SPEAKER_NUMBER:
             ids[cid] = []
+        else:
+            break
 
 files_set = list(ids.values())
 train_set, dev_set, test_set = [], [], []
@@ -60,23 +45,20 @@ for files in files_set:
     dev_set.append(files[tmp_a:tmp_b])
     test_set.append(files[tmp_b:])
 
-
 def build_data(data):
 
     def build_one_dataset(files, y):
-
         dataset = Dataset.from_tensor_slices(files)
         dataset = dataset.shuffle(1024)
         dataset = dataset.map(lambda x: tf.py_func(
-            EXTRACT, inp=[x], Tout=[tf.float64]), num_parallel_calls=4)
+            extract, inp=[x], Tout=[tf.float64]), num_parallel_calls=4)
         dataset = dataset.flat_map(lambda x: Dataset.from_tensor_slices(x))
         dataset = dataset.map(lambda x: (x, y))
         return dataset
 
     base_dataset = Dataset.range(SPEAKER_NUMBER)
     full_dataset = base_dataset.map(lambda x: tf.py_func(
-        lambda x: [data[x]], inp=[x], Tout=[tf.string]))
-    full_dataset = Dataset.zip((full_dataset, Dataset.range(SPEAKER_NUMBER)))
+        lambda x: [data[x],x], inp=[x], Tout=[tf.string,tf.int64]))
     full_dataset = full_dataset.interleave(build_one_dataset, cycle_length=SPEAKER_NUMBER,
                                            num_parallel_calls=tf.data.experimental.AUTOTUNE)
     full_dataset = full_dataset.shuffle(BATCH*128)
@@ -88,7 +70,7 @@ classifier = tf.estimator.Estimator(
     model_fn=dense_model,
     model_dir=LOGDIR,
     params={
-        'feature_dims': 41*39,
+        'feature_dims': 21,
         'hidden_units': [512, 512, 512, 512],
         'n_classes': SPEAKER_NUMBER,
     })
