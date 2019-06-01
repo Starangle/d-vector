@@ -63,3 +63,4 @@ def build_data(data,batch,shuffle=0,repeat=False):
     full_dataset = full_dataset.shuffle(batch*128)
     full_dataset = full_dataset.batch(batch)
     return full_dataset
+
