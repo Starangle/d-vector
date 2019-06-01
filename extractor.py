@@ -3,9 +3,6 @@ import os
 import numpy as np
 import threadpool
 
-def convertor(npy_file):
-    return converted
-
 if __name__=='__main__':
     clean100=open('/home/sub18/code/data_catalogue/train-clean-100.list').read().split()
     clean360=open('/home/sub18/code/data_catalogue/train-clean-360.list').read().split()

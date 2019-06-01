@@ -7,76 +7,94 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 from tensorflow.data import Dataset
-from models import *
-from extractor import extract
-
-tf.enable_eager_execution()
+from models import dense_graph
+from data_loader import load_data,build_data
 
 # 可配置区域开始
-SRC='/home/sub18/code/data_catalogue/libri_clean.list'
-LOGDIR='/home/sub18/code/log/d-vector-pretrain'
-SPEAKER_NUMBER=100
+SRC='/home/sub18/code/data_catalogue/mfcc_clean_100.list'
+TRAINLOGDIR='/home/sub18/code/log/speaker_recognition/train'
+DEVLOGDIR='/home/sub18/code/log/speaker_recognition/dev'
+MODELDIR='/home/sub18/code/models/speaker_recognition'
+MODELNAME='/home/sub18/code/models/speaker_recognition/speaker_recognition'
+SPEAKER_NUMBER=20
 DEV_RATE = 0.1
 TEST_RATE = 0.1
 LEFT = 30
 RIGHT = 10
 EPCHO = 10
 BATCH = 512
+FEATURE_DIM=41*40
 # 可配置区域结束
 
-with contextlib.closing(open(SRC)) as f:
-    files = f.read().split()
-    ids = dict()
-    for file in files:
-        cid = int(os.path.basename(file).split('-')[0])
-        if cid in ids:
-            ids[cid].append(file)
-        elif len(ids) < SPEAKER_NUMBER:
-            ids[cid] = []
-        else:
-            break
+# 数据准备
+train_set, dev_set, test_set = load_data(SRC,SPEAKER_NUMBER,DEV_RATE,TEST_RATE)
+train_iter=build_data(train_set,BATCH,repeat=False).make_one_shot_iterator().get_next()
+dev_iter=build_data(dev_set,BATCH).make_one_shot_iterator().get_next()
+test_iter=build_data(test_set,BATCH).make_one_shot_iterator().get_next()
 
-files_set = list(ids.values())
-train_set, dev_set, test_set = [], [], []
-for files in files_set:
-    tmp_a = int(len(files)*(1-DEV_RATE-TEST_RATE))
-    tmp_b = int(len(files)*(1-TEST_RATE))
-    train_set.append(files[:tmp_a])
-    dev_set.append(files[tmp_a:tmp_b])
-    test_set.append(files[tmp_b:])
+# 计数器
+counter=tf.Variable(0)
 
-def build_data(data):
+# 网络拓扑
+inputs=tf.placeholder(dtype=tf.float64,shape=[None,FEATURE_DIM])
+labels=tf.placeholder(dtype=tf.int64,shape=[None,1])
+net=dense_graph(inputs)
+logits=tf.layers.Dense(SPEAKER_NUMBER)(net)
 
-    def build_one_dataset(files, y):
-        dataset = Dataset.from_tensor_slices(files)
-        dataset = dataset.shuffle(1024)
-        dataset = dataset.map(lambda x: tf.py_func(
-            extract, inp=[x], Tout=[tf.float64]), num_parallel_calls=4)
-        dataset = dataset.flat_map(lambda x: Dataset.from_tensor_slices(x))
-        dataset = dataset.map(lambda x: (x, y))
-        return dataset
+# 指标计算
+loss=tf.losses.sparse_softmax_cross_entropy(labels=labels,logits=logits)
+predict=tf.argmax(logits,1)
+reshaped_label=tf.reshape(labels,[-1])
+acc=tf.metrics.accuracy(labels=reshaped_label,predictions=predict)
 
-    base_dataset = Dataset.range(SPEAKER_NUMBER)
-    full_dataset = base_dataset.map(lambda x: tf.py_func(
-        lambda x: [data[x],x], inp=[x], Tout=[tf.string,tf.int64]))
-    full_dataset = full_dataset.interleave(build_one_dataset, cycle_length=SPEAKER_NUMBER,
-                                           num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    full_dataset = full_dataset.shuffle(BATCH*128)
-    full_dataset = full_dataset.batch(BATCH)
-    return full_dataset
+# 优化方案
+optimizer=tf.train.AdamOptimizer(0.01).minimize(loss,global_step=counter)
+
+# 可视化
+tf.summary.scalar('loss',loss)
+tf.summary.scalar('acc',acc[1])
+summary=tf.summary.merge_all()
+train_writer=tf.summary.FileWriter(TRAINLOGDIR,tf.get_default_graph())
+dev_writer=tf.summary.FileWriter(DEVLOGDIR,tf.get_default_graph())
+
+# 初始化图中已经存在的变量
+init=tf.global_variables_initializer()
+local_init=tf.local_variables_initializer()
+
+# 持久化
+checkpoint=tf.train.get_checkpoint_state(MODELDIR)
+if checkpoint and checkpoint.model_checkpoint_path:
+    model_path=checkpoint.model_checkpoint_path
+else:
+    model_path=None
+saver=tf.train.Saver()
+
+with tf.Session() as sess:
+    sess.run(local_init)
+    if model_path is not None:
+        saver.restore(sess,checkpoint.model_checkpoint_path)
+    else:
+        sess.run(init)
+        
+    try:
+        while 1:
+            x,y=sess.run(train_iter)
+            res=sess.run([acc,optimizer,summary],feed_dict={inputs:x,labels:y})
+            train_writer.add_summary(res[-1],global_step=counter.eval())
+    except:
+        saver.save(sess,MODELNAME,global_step=counter)
 
 
-classifier = tf.estimator.Estimator(
-    model_fn=dense_model,
-    model_dir=LOGDIR,
-    params={
-        'feature_dims': 21,
-        'hidden_units': [512, 512, 512, 512],
-        'n_classes': SPEAKER_NUMBER,
-    })
 
-for i in range(EPCHO):
-    classifier.train(input_fn=lambda: build_data(train_set))
-    classifier.evaluate(input_fn=lambda: build_data(dev_set))
-r = classifier.evaluate(input_fn=lambda: build_data(test_set))
-print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**r))
+
+
+
+
+
+
+
+
+
+
+
+
