@@ -32,7 +32,7 @@ def dense_model(features, labels, mode, params):
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
-def dense_graph(inputs):
+def maxout_graph(inputs):
     net=tf.layers.Dense(256,activation=tf.nn.relu)(inputs)
     net=tf.layers.Dense(256,activation=tf.nn.relu)(net)
     net=tf.contrib.layers.maxout(net,256)
@@ -40,4 +40,15 @@ def dense_graph(inputs):
     net=tf.contrib.layers.maxout(net,256)
     net=tf.layers.Dropout(0.5)(net)
     return net
+
+def dense_graph(inputs):
+    net=tf.layers.Dense(512,activation=tf.nn.relu)(inputs)
+    net=tf.layers.Dense(512,activation=tf.nn.relu)(net)
+    net=tf.layers.Dense(512,activation=tf.nn.relu)(net)
+    net=tf.layers.Dense(512,activation=tf.nn.relu)(net)
+    return net
+
+
+
+
     
