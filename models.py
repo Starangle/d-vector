@@ -1,4 +1,5 @@
 import tensorflow as tf
+from layers import Maxout
 
 def dense_model(features, labels, mode, params):
     net = tf.reshape(features, [-1, params['feature_dims']])
@@ -32,9 +33,11 @@ def dense_model(features, labels, mode, params):
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
 def dense_graph(inputs):
-    net=tf.layers.Dense(512,activation=tf.nn.relu)(inputs)
-    net=tf.layers.Dense(512,activation=tf.nn.relu)(net)
-    net=tf.layers.Dense(512,activation=tf.nn.relu)(net)
-    net=tf.layers.Dense(512,activation=tf.nn.relu)(net)
+    net=tf.layers.Dense(256,activation=tf.nn.relu)(inputs)
+    net=tf.layers.Dense(256,activation=tf.nn.relu)(net)
+    net=tf.contrib.layers.maxout(net,256)
+    net=tf.layers.Dropout(0.5)(net)
+    net=tf.contrib.layers.maxout(net,256)
+    net=tf.layers.Dropout(0.5)(net)
     return net
     

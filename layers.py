@@ -14,7 +14,7 @@ class Maxout(tf.keras.layers.Layer):
         bshape=tf.TensorShape((self.k,self.output_dim))
         self.weights = self.add_weight(name='weights',shape=wshape,
                                       initializer='uniform',trainable=True)
-        self.bias=self.add_weight(name='bias',shape=bshape
+        self.bias=self.add_weight(name='bias',shape=bshape,
                                  initializer='uniform',trainable=True)
         super(Maxout, self).build(input_shape)
 
