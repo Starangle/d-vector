@@ -78,8 +78,8 @@ def verify_data(cata):
         files_set = list(ids.values())
         np.random.shuffle(files_set)
         target=files_set[0]
-        attacker=np.vstack(files_set[1:])
-        attacker=np.choose(attacker,len(target))
+        attacker=np.hstack(files_set[1:])
+        attacker=np.random.choice(attacker,len(target)).tolist()
         
         i=int(len(target)*SPLIT_RATE)
         train_set=[target[:i],attacker[:i]]

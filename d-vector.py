@@ -161,6 +161,7 @@ def verify(config):
         test_set, int(config['batch'])).make_one_shot_iterator().get_next()
 
     new_init=tf.global_variables_initializer()
+    new_local_init=tf.local_variables_initializer()
     
     with tf.Session() as sess:
         sess.run(new_init)
@@ -168,18 +169,24 @@ def verify(config):
 
         for i in range(int(config['verify_train_epoch'])):
             x,y=sess.run(train_iter)
-            sess.run([new_optimizer],feed_dict={
-                inputs:x,labels:y,drop_rate:0
+            y=np.reshape(y,[-1])
+            sess.run([new_optimizer,new_loss],feed_dict={
+                inputs:x,new_labels:y,drop_rate:0
             })
+        
+        sess.run(new_local_init)
 
+        final_acc=0
         try:
             while 1:
                 x,y=sess.run(test_iter)
+                y=np.reshape(y,[-1])
                 result=sess.run(new_acc,feed_dict={
-                    inputs:x,labels:y,drop_rate:0
+                    inputs:x,new_labels:y,drop_rate:0
                 })
+                final_acc=result[-1]
         except:
-            print(result[-1])
+            print(final_acc)
 
 
 if __name__ == '__main__':
