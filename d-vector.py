@@ -68,7 +68,7 @@ def create(config):
         saver.save(sess, config['model_name'])
 
 
-def train(config, train_set, test_set):
+def train(config, train_set, dev_set):
     train_iter = build_data(
         train_set, int(config['batch']), repeat=True).make_one_shot_iterator().get_next()
     dev_iter = build_data(
