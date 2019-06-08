@@ -1,13 +1,13 @@
 {
     "src":"/home/sub18/code/data_catalogue/mfcc_clean_360.list",
-    "train_dir":"log/recognition/train",
-    "dev_dir":"log/recognition/dev",
+    "train_dir":"logs/recognition/train",
+    "dev_dir":"logs/recognition/dev",
     "model_dir":"models/recognition_maxout",
     "model_name":"models/recognition_maxout/main",
-    "speaker_number":"100",
+    "speaker_number":"20",
     "dev_rate" : "0.1",
     "test_rate" : "0.1",
-    "epcho" : "1",
+    "epoch" : "1",
     "batch" : "512",
     "model":"maxout"
 }
