@@ -64,3 +64,25 @@ def build_data(data,batch,shuffle=0,repeat=False):
     full_dataset = full_dataset.batch(batch)
     return full_dataset
 
+def verify_data(cata):
+    SPLIT_RATE=0.2
+    with contextlib.closing(open(cata)) as f:
+        files = f.read().split()
+        ids = dict()
+        for file in files:
+            cid = int(os.path.basename(file).split('-')[0])
+            if cid in ids:
+                ids[cid].append(file)
+            else:
+                ids[cid] = []
+        files_set = list(ids.values())
+        np.random.shuffle(files_set)
+        target=files_set[0]
+        attacker=np.vstack(files_set[1:])
+        attacker=np.choose(attacker,len(target))
+        
+        i=int(len(target)*SPLIT_RATE)
+        train_set=[target[:i],attacker[:i]]
+        test_set=[target[i:],attacker[i:]]
+        return train_set,test_set
+

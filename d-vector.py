@@ -8,7 +8,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from tensorflow.data import Dataset
-from data_loader import load_data, build_data
+from data_loader import *
 from layers import Maxout
 
 
@@ -133,6 +133,54 @@ def train(config, train_set, test_set):
             dev_writer.add_summary(result[-1],global_step=global_step.eval())
         saver.save(sess,config['model_name'],global_step=global_step,write_meta_graph=False)
 
+def verify(config):
+    model=tf.train.get_checkpoint_state(config['model_dir'])
+    saver=tf.train.import_meta_graph(config['model_name']+'.meta')
+    graph=tf.get_default_graph()
+    inputs=graph.get_tensor_by_name('x:0')
+    logits=graph.get_tensor_by_name('logits/BiasAdd:0')
+    drop_rate=graph.get_tensor_by_name('drop_rate:0')
+    new_labels=tf.placeholder(tf.int64,shape=[None])
+
+    with tf.variable_scope('verify'):
+        net=tf.layers.Dense(128,activation=tf.nn.relu)(logits)
+        net=tf.layers.Dense(32,activation=tf.nn.relu)(net)
+        new_logits=tf.layers.Dense(2,activation=None)(net)
+    new_loss=tf.losses.sparse_softmax_cross_entropy(logits=new_logits,labels=new_labels)
+    new_optimizer=tf.train.AdagradOptimizer(0.01).minimize(
+        new_loss,var_list=tf.get_collection(
+            tf.GraphKeys.TRAINABLE_VARIABLES,scope='verify')
+    )
+    new_predictions=tf.argmax(new_logits,1)
+    new_acc=tf.metrics.accuracy(predictions=new_predictions,labels=new_labels)
+
+    train_set,test_set=verify_data(config['verify_src'])
+    train_iter = build_data(
+        train_set, int(config['batch']), repeat=True).make_one_shot_iterator().get_next()
+    test_iter = build_data(
+        test_set, int(config['batch'])).make_one_shot_iterator().get_next()
+
+    new_init=tf.global_variables_initializer()
+    
+    with tf.Session() as sess:
+        sess.run(new_init)
+        saver.restore(sess,model.model_checkpoint_path)
+
+        for i in range(int(config['verify_train_epoch'])):
+            x,y=sess.run(train_iter)
+            sess.run([new_optimizer],feed_dict={
+                inputs:x,labels:y,drop_rate:0
+            })
+
+        try:
+            while 1:
+                x,y=sess.run(test_iter)
+                result=sess.run(new_acc,feed_dict={
+                    inputs:x,labels:y,drop_rate:0
+                })
+        except:
+            print(result[-1])
+
 
 if __name__ == '__main__':
 
@@ -150,5 +198,7 @@ if __name__ == '__main__':
         train(config, train_set, dev_set)
     elif cmd == 'test':
         test(config)
+    elif cmd =='verify':
+        verify(config)
     else:
         print("Unknown command!")
