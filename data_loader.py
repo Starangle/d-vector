@@ -82,7 +82,7 @@ def verify_data(cata):
         attacker=np.random.choice(attacker,len(target)).tolist()
         
         i=int(len(target)*SPLIT_RATE)
-        train_set=[target[:i],attacker[:i]]
-        test_set=[target[i:],attacker[i:]]
+        train_set=[attacker[:i],target[:i]]
+        test_set=[attacker[i:],target[i:]]
         return train_set,test_set
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding=utf-8
-import bob
+from sklearn.metrics import roc_curve
 import contextlib
 import os
 import random
@@ -147,7 +147,7 @@ def verify(config):
         net=tf.layers.Dense(128,activation=tf.nn.relu)(logits)
         net=tf.layers.Dense(32,activation=tf.nn.relu)(net)
         new_logits=tf.layers.Dense(1,activation=None)(net)
-    new_loss=tf.reduce_mean(tf.square(new_logits-labels))
+    new_loss=tf.reduce_mean(tf.square(new_logits-tf.cast(new_labels,tf.float64)))
     new_optimizer=tf.train.AdagradOptimizer(0.01).minimize(
         new_loss,var_list=tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES,scope='verify')
@@ -186,11 +186,11 @@ def verify(config):
                 scores.extend(result)
                 gt.extend(y)
         except:
-            tmp=list(zip(scores,gt))
-            positives=list(filter(lambda x:x[1]==0,tmp))
-            negatives=list(filter(lambda x:x[1]==1,tmp))
-            eer=bob.measure.eer_threshold(negatives,positives)
-            print(eer)
+            fpr, tpr, threshold = roc_curve(gt,scores, pos_label=1)
+            fnr = 1 - tpr
+            eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
+            eer_threshold = threshold[np.nanargmin(np.absolute((fnr - fpr)))]
+            print(eer,eer_threshold)
 
 
 if __name__ == '__main__':
