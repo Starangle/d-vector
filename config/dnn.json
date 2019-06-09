@@ -1,0 +1,15 @@
+{
+    "src":"/home/sub18/code/data_catalogue/mfcc_clean_360.list",
+    "train_dir":"logs/dnn/train",
+    "dev_dir":"logs/dnn/dev",
+    "model_dir":"models/recognition_dnn",
+    "model_name":"models/recognition_dnn/main",
+    "speaker_number":"512",
+    "dev_rate" : "0.1",
+    "test_rate" : "0.1",
+    "epoch" : "15",
+    "batch" : "256",
+    "model":"dnn",
+    "verify_src":"/home/sub18/code/data_catalogue/mfcc_clean_100.list",
+    "verify_train_epoch":"51200"
+}
