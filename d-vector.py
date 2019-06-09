@@ -146,7 +146,7 @@ def verify(config):
     with tf.variable_scope('verify'):
         net=tf.layers.Dense(128,activation=tf.nn.relu)(logits)
         net=tf.layers.Dense(32,activation=tf.nn.relu)(net)
-        new_logits=tf.layers.Dense(1,activation=None)(net)
+        new_logits=tf.layers.Dense(1,activation=tf.nn.sigmoid)(net)
     new_loss=tf.reduce_mean(tf.square(new_logits-tf.cast(new_labels,tf.float64)))
     new_optimizer=tf.train.AdagradOptimizer(0.01).minimize(
         new_loss,var_list=tf.get_collection(
@@ -160,7 +160,6 @@ def verify(config):
         test_set, int(config['batch'])).make_one_shot_iterator().get_next()
 
     new_init=tf.global_variables_initializer()
-    new_local_init=tf.local_variables_initializer()
     
     with tf.Session() as sess:
         sess.run(new_init)
@@ -173,7 +172,6 @@ def verify(config):
                 inputs:x,new_labels:y,drop_rate:0
             })
         
-        sess.run(new_local_init)
 
         scores,gt=[],[]
         try:
