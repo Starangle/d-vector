@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding=utf-8
+import bob
 import contextlib
 import os
 import random
@@ -145,14 +146,12 @@ def verify(config):
     with tf.variable_scope('verify'):
         net=tf.layers.Dense(128,activation=tf.nn.relu)(logits)
         net=tf.layers.Dense(32,activation=tf.nn.relu)(net)
-        new_logits=tf.layers.Dense(2,activation=None)(net)
-    new_loss=tf.losses.sparse_softmax_cross_entropy(logits=new_logits,labels=new_labels)
+        new_logits=tf.layers.Dense(1,activation=None)(net)
+    new_loss=tf.reduce_mean(tf.square(new_logits-labels))
     new_optimizer=tf.train.AdagradOptimizer(0.01).minimize(
         new_loss,var_list=tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES,scope='verify')
     )
-    new_predictions=tf.argmax(new_logits,1)
-    new_acc=tf.metrics.accuracy(predictions=new_predictions,labels=new_labels)
 
     train_set,test_set=verify_data(config['verify_src'])
     train_iter = build_data(
@@ -176,17 +175,22 @@ def verify(config):
         
         sess.run(new_local_init)
 
-        final_acc=0
+        scores,gt=[],[]
         try:
             while 1:
                 x,y=sess.run(test_iter)
                 y=np.reshape(y,[-1])
-                result=sess.run(new_acc,feed_dict={
+                result=sess.run(new_logits,feed_dict={
                     inputs:x,new_labels:y,drop_rate:0
                 })
-                final_acc=result[-1]
+                scores.extend(result)
+                gt.extend(y)
         except:
-            print(final_acc)
+            tmp=list(zip(scores,gt))
+            positives=list(filter(lambda x:x[1]==0,tmp))
+            negatives=list(filter(lambda x:x[1]==1,tmp))
+            eer=bob.measure.eer_threshold(negatives,positives)
+            print(eer)
 
 
 if __name__ == '__main__':
