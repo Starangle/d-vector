@@ -11,5 +11,5 @@
     "batch" : "256",
     "model":"dnn",
     "verify_src":"/home/sub18/code/data_catalogue/mfcc_clean_100.list",
-    "verify_train_epoch":"51200"
+    "verify_train_epoch":"10000"
 }

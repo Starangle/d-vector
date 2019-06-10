@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding=utf-8
 from sklearn.metrics import roc_curve
+from matplotlib import pyplot as plt
 import contextlib
 import os
 import random
@@ -141,14 +142,15 @@ def verify(config):
     inputs=graph.get_tensor_by_name('x:0')
     logits=graph.get_tensor_by_name('logits/BiasAdd:0')
     drop_rate=graph.get_tensor_by_name('drop_rate:0')
-    new_labels=tf.placeholder(tf.int64,shape=[None])
+    new_labels=tf.placeholder(tf.int64,shape=[None,1])
 
     with tf.variable_scope('verify'):
         net=tf.layers.Dense(128,activation=tf.nn.relu)(logits)
         net=tf.layers.Dense(32,activation=tf.nn.relu)(net)
         new_logits=tf.layers.Dense(1,activation=tf.nn.sigmoid)(net)
     new_loss=tf.reduce_mean(tf.square(new_logits-tf.cast(new_labels,tf.float64)))
-    new_optimizer=tf.train.AdagradOptimizer(0.01).minimize(
+
+    new_optimizer=tf.train.AdamOptimizer(0.001).minimize(
         new_loss,var_list=tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES,scope='verify')
     )
@@ -163,21 +165,22 @@ def verify(config):
     
     with tf.Session() as sess:
         sess.run(new_init)
+
         saver.restore(sess,model.model_checkpoint_path)
 
         for i in range(int(config['verify_train_epoch'])):
             x,y=sess.run(train_iter)
-            y=np.reshape(y,[-1])
-            sess.run([new_optimizer,new_loss],feed_dict={
+            _,loss_val=sess.run([new_optimizer,new_loss],feed_dict={
                 inputs:x,new_labels:y,drop_rate:0
             })
+            if i%100==0:
+                print("Step %d:loss is %.6lf"%(i,loss_val))
         
 
         scores,gt=[],[]
         try:
             while 1:
                 x,y=sess.run(test_iter)
-                y=np.reshape(y,[-1])
                 result=sess.run(new_logits,feed_dict={
                     inputs:x,new_labels:y,drop_rate:0
                 })
@@ -186,6 +189,7 @@ def verify(config):
         except:
             fpr, tpr, threshold = roc_curve(gt,scores, pos_label=1)
             fnr = 1 - tpr
+            plt.plot(fnr,fpr)
             eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
             eer_threshold = threshold[np.nanargmin(np.absolute((fnr - fpr)))]
             print(eer,eer_threshold)
